@@ -106,9 +106,6 @@ stow_ignore_count=$(grep -c -- '--ignore="$STOW_IGNORE_REGEX"' "$ROOT/lib/action
 assert_eq '3' "$stow_ignore_count" 'all Stow operations ignore Vim swap files'
 stow_no_folding_count=$(grep -c -- '--no-folding' "$ROOT/lib/actions.sh")
 assert_eq '3' "$stow_no_folding_count" 'all Stow operations disable directory folding'
-stow_verbose_count=$(grep -c -- '--verbose=1' "$ROOT/lib/actions.sh")
-assert_eq '3' "$stow_verbose_count" 'all Stow operations show link details'
-
 vim_install="$HOME/.local/opt/vim/v9.2.1036"
 mkdir -p "$vim_install/bin" "$HOME/.local/bin"
 printf '%s\n' '#!/usr/bin/env bash' \

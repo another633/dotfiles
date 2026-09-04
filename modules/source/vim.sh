@@ -19,7 +19,8 @@ VIM_COMMANDS=(vim vimdiff view ex rvim rview xxd)
 verify_vim_binary() {
   local binary=$1 output feature
   [[ -x $binary ]] || return 1
-  output=$($binary --version 2>/dev/null) || return 1
+  # 强制使用 C locale，避免 gettext 翻译版本和功能描述。
+  output=$(LC_ALL=C "$binary" --version 2>/dev/null) || return 1
   grep -Fq 'VIM - Vi IMproved 9.2' <<< "$output" || return 1
   grep -Eq '^Included patches: 1-1036$' <<< "$output" || return 1
   grep -Fq 'Huge version without GUI.' <<< "$output" || return 1

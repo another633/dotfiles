@@ -109,12 +109,22 @@ assert_eq '3' "$stow_no_folding_count" 'all Stow operations disable directory fo
 
 vim_install="$HOME/.local/opt/vim/v9.2.1036"
 mkdir -p "$vim_install/bin" "$HOME/.local/bin"
-printf '%s\n' '#!/usr/bin/env bash' "cat <<'EOF'" \
+printf '%s\n' '#!/usr/bin/env bash' \
+  'if [[ ${LC_ALL:-} == C ]]; then' \
+  "  cat <<'EOF'" \
   'VIM - Vi IMproved 9.2' \
   'Included patches: 1-1036' \
   'Huge version without GUI.' \
   '+lua +python3 +perl -ruby -tcl +terminal +clipboard +X11 +xterm_clipboard +wayland +wayland_clipboard' \
-  'EOF' > "$vim_install/bin/vim"
+  'EOF' \
+  'else' \
+  "  cat <<'EOF'" \
+  'VIM - Vi IMproved 9.2' \
+  '包含补丁：1-1036' \
+  '无图形界面的巨大版本。' \
+  '+lua +python3 +perl -ruby -tcl +terminal +clipboard +X11 +xterm_clipboard +wayland +wayland_clipboard' \
+  'EOF' \
+  'fi' > "$vim_install/bin/vim"
 chmod +x "$vim_install/bin/vim"
 for command in vimdiff view ex rvim rview xxd; do
   ln -s vim "$vim_install/bin/$command"

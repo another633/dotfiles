@@ -164,7 +164,9 @@ apply_stow() {
   local package
   check_stow || die "resolve Stow conflicts before applying"
   while IFS= read -r package; do
-    stow --restow --no-folding --ignore="$STOW_IGNORE_REGEX" --target="$HOME" --dir="$DOTFILES_ROOT/stow" "$package"
+    log "正在链接 Stow 包：$package"
+    stow --restow --verbose=1 --no-folding --ignore="$STOW_IGNORE_REGEX" \
+      --target="$HOME" --dir="$DOTFILES_ROOT/stow" "$package"
   done < <(profile_items stow)
 }
 
@@ -199,7 +201,9 @@ unstow_all() {
   local package
   while IFS= read -r package; do
     [[ -d $DOTFILES_ROOT/stow/$package ]] || die "unknown Stow package: $package"
-    stow --delete --no-folding --ignore="$STOW_IGNORE_REGEX" --target="$HOME" --dir="$DOTFILES_ROOT/stow" "$package"
+    log "正在取消链接 Stow 包：$package"
+    stow --delete --verbose=1 --no-folding --ignore="$STOW_IGNORE_REGEX" \
+      --target="$HOME" --dir="$DOTFILES_ROOT/stow" "$package"
   done < <(profile_items stow)
   log "Stow links removed; packages and system settings were left unchanged"
 }

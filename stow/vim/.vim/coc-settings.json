@@ -1,0 +1,17 @@
+{
+	"Lua.workspace.library": [
+		"/usr/local/share/lua/5.1"
+  ],
+  "Lua.workspace.checkThirdParty": false,
+  "suggest.noselect": true,
+  "suggest.enablePreselect": true,
+  "list.previousKeymap": "<C-k>",
+  "list.nextKeymap": "<C-j>",
+  "languageserver": {
+	  "csharp-ls": {
+		  "command": "csharp-ls",
+		  "filetypes": ["cs"],
+		  "rootPatterns": ["*.sln", "*.csproj", ".git/", ".hg/"]
+	  }
+  }
+}

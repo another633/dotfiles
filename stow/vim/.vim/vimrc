@@ -1,0 +1,121 @@
+let arch = substitute(system('uname -m'), '\n', '', 'g')
+
+call plug#begin()
+" File Tree ---------------------------------------------------------
+Plug 'preservim/nerdtree' "文件管理
+Plug 'chriszarate/yazi.vim'
+Plug 'tpope/vim-vinegar'
+
+" Comment -----------------------------------------------------------
+Plug 'tpope/vim-commentary' "注释
+Plug 'kkoomen/vim-doge', { 'do': { -> doge#install() } } "智能注释
+
+" Quick -------------------------------------------------------------
+Plug 'liuchengxu/vim-which-key'
+Plug 'tpope/vim-surround' "删除、更改和添加包围物
+Plug 'jiangmiao/auto-pairs' "符号配对
+Plug 'tpope/vim-unimpaired' "列表跳转
+Plug 'tpope/vim-rails'
+
+" Substitute --------------------------------------------------------
+Plug 'tpope/vim-abolish' "替换列表
+
+" Debug -------------------------------------------------------------
+Plug 'puremourning/vimspector' "调试
+
+" Search ------------------------------------------------------------
+Plug 'junegunn/fzf', {'do' : { -> fzf#install() } }
+Plug 'junegunn/fzf.vim'
+Plug 'ppwwyyxx/vim-PinyinSearch'
+
+" Lsp ---------------------------------------------------------------
+Plug 'prabirshrestha/vim-lsp'
+Plug 'neoclide/coc.nvim', {'branch': 'release'}
+Plug 'dense-analysis/ale'
+
+" Snippet -----------------------------------------------------------
+Plug 'SirVer/ultisnips' "代码片段本体
+Plug 'honza/vim-snippets' "片段
+
+" Doc ---------------------------------------------------------------
+Plug 'yianwillis/vimcdoc' "vim中文文档
+Plug 'vimwiki/vimwiki'
+" Plug 'lervag/wiki.vim'
+" Plug 'lervag/wiki.vim', { 'tag': 'v0.10' }
+
+" Git ---------------------------------------------------------------
+Plug 'tpope/vim-fugitive'
+Plug 'junegunn/gv.vim'
+Plug 'airblade/vim-gitgutter'
+
+" AI ----------------------------------------------------------------
+Plug 'Exafunction/windsurf.vim', {'branch': 'main'}
+
+" Grep --------------------------------------------------------------
+Plug 'mileszs/ack.vim'
+Plug 'dyng/ctrlsf.vim'
+
+" Move --------------------------------------------------------------
+Plug 'easymotion/vim-easymotion'
+Plug 't9md/vim-choosewin'
+
+" Scheme ------------------------------------------------------------
+Plug 'junegunn/goyo.vim'
+Plug 'amix/vim-zenroom2'
+
+" Others -----------------------------------------------------------
+Plug 'tpope/vim-repeat' "支持插件的点范式
+Plug 'jez/vim-better-sml' "standard ML
+Plug 'preservim/tagbar' "大纲
+Plug 'voldikss/vim-floaterm' "浮动终端
+Plug 'djoshea/vim-autoread' "自动刷新
+Plug 'chrisbra/colorizer' "彩色
+Plug 'vim-utils/vim-man'
+Plug 'vim-test/vim-test' "测试
+Plug 'godlygeek/tabular' "对齐
+Plug 'preservim/vim-markdown'
+Plug 'MattesGroeger/vim-bookmarks' "书签
+
+Plug 'mg979/vim-visual-multi' "多光标
+Plug 'junegunn/vim-easy-align' "对齐
+Plug 'wellle/targets.vim' "更多的文本对象
+
+" Chinese -----------------------------------------------------------
+if arch ==# 'aarch64'
+	Plug 'ZSaberLv0/ZFVimIM' " 中文输入法
+	Plug 'ZSaberLv0/ZFVimJob' " 可选, 用于提升词库加载性能
+endif
+
+" My plugins -------------------------------------------------------
+if arch ==# 'aarch64'
+	Plug '~/Projects/vim/Dict' " 本地词库插件
+	Plug '~/Projects/vim/Typer.vim' " 本地词库插件
+	Plug '~/Projects/vim/NCE.vim' " 新概念英语学习插件
+	Plug '~/Projects/vim/Aichat.vim' " AI聊天插件
+	Plug '~/Projects/vim/GhostNote.vim' " 注释笔记
+	" Plug '~/Projects/vim/SCToolkit.vim'
+elseif arch ==# 'x86_64'
+	Plug '~/Projects/vim/Dict.vim' " AI聊天插件
+	Plug '~/Projects/vim/Typer.vim' " 本地词库插件
+	Plug '~/Projects/vim/NCE.vim' " 新概念英语学习插件
+	Plug '~/Projects/vim/Aichat.vim' " AI聊天插件
+	Plug '~/Projects/vim/GhostNote.vim' " 注释笔记
+	" Plug '~/Projects/vim/SCToolkit.vim'
+else
+	echo "其它架构" . arch
+endif
+
+call plug#end()
+
+" 在 vimrc 中添加这行
+let $MYVIMRC_CONFIG_PATH = expand('~/.vim/plugin-config')
+for file in split(glob($MYVIMRC_CONFIG_PATH . '/*.vim'), '\n')
+    execute 'source' file
+endfor
+
+lua << EOF
+package.path = package.path .. ';' .. vim.fn.system('luarocks path --lr-path'):gsub('%s+$','')
+package.cpath = package.cpath .. ';' .. vim.fn.system('luarocks path --lr-cpath'):gsub('%s+$','')
+EOF
+
+execute 'source' expand('~/.vim/keybinding.vim')

@@ -1,0 +1,121 @@
+stream: true
+keybindings: vi
+editor: vim
+rag_embedding_model: ollama:nomic-embed-text:latest
+rag_top_k: 10
+rag_chunk_size: 800
+rag_chunk_overlap: 150
+
+function_calling: true
+mapping_tools:                   # Alias for a tool or toolset
+  fs: 'cat,ls'
+use_tools: fs                  # Which tools to use by default
+
+document_loaders:
+  pdf: 'pdftotext $1 -'                         # Load .pdf file, see https://poppler.freedesktop.org to set up pdftotext
+  docx: 'pandoc --to plain $1'                  # Load .docx file, see https://pandoc.org to set up pandoc
+
+clients:
+  - type: openai-compatible
+    name: deepseek
+    api_base: "https://api.deepseek.com/v1"
+    models:
+      - name: deepseek-v4-flash
+        max_input_tokens: 100000
+      - name: deepseek-v4-pro
+        max_input_tokens: 100000
+      - name: deepseek-v4-flash-vision-exp
+        max_input_tokens: 100000
+
+    patch:
+      chat_completions:
+        'deepseek-v4-flash|deepseek-v4-flash-vision-exp':
+          body:
+            thinking:
+              type: disabled
+
+  - type: openai-compatible
+    name: zhipu
+    api_base: "https://open.bigmodel.cn/api/paas/v4"
+    models:
+      - name: glm-5.2
+        max_input_tokens: 100000
+
+    patch:
+      chat_completions:
+        'glm-5.2':
+          body:
+            thinking:
+              type: disabled
+
+  - type: gemini
+    name: gemini
+    api_base: https://generativelanguage.googleapis.com/v1beta
+    models:
+      - name: gemini-3.1-flash-lite
+        max_input_tokens: 100000
+
+    patch:
+    chat_completions:
+      '.*':
+        body:
+          safetySettings:
+            - category: HARM_CATEGORY_HARASSMENT
+              threshold: BLOCK_NONE
+            - category: HARM_CATEGORY_HATE_SPEECH
+              threshold: BLOCK_NONE
+            - category: HARM_CATEGORY_SEXUALLY_EXPLICIT
+              threshold: BLOCK_NONE
+            - category: HARM_CATEGORY_DANGEROUS_CONTENT
+              threshold: BLOCK_NONE
+
+  - type: openai-compatible
+    name: webai
+    api_base: "http://127.0.0.1:3210/v1"   # 你的本地嵌入服务
+    api_key: "not-needed"
+    models:
+      - name: deepseek
+        max_input_tokens: 100000
+      - name: chatgpt
+        max_input_tokens: 100000
+      - name: grok
+        max_input_tokens: 100000
+
+  - type: openai-compatible
+    name: ollama
+    api_base: "http://127.0.0.1:11434/v1"   # 你的本地嵌入服务
+    api_key: "not-needed"
+    models:
+      - name: smallthinker:latest
+        max_input_tokens: 100000
+      - name: llama3.1:8b
+        max_input_tokens: 100000
+      - name: deepseek-coder:6.7b
+        max_input_tokens: 100000
+      - name: deepseek-coder-v2:latest
+        max_input_tokens: 100000
+      - name: deepseek-r1:8b
+        max_input_tokens: 100000
+      - name: qwen2.5:7b
+        max_input_tokens: 100000
+      - name: translategemma:4b
+        max_input_tokens: 100000
+      - name: qwen3.5:9b
+        max_input_tokens: 100000
+      - name: glm-ocr:latest
+        max_input_tokens: 100000
+
+      - name: nomic-embed-text:latest
+        type: embedding
+      - name: bge-m3:latest
+        type: embedding
+      - name: EntropyYue/jina-embeddings-v2-base-zh:latest
+        type: embedding
+      - name: qllama/bge-reranker-v2-m3:latest
+        type: reranker
+
+    patch:
+      chat_completions:
+        'qwen3.5:9b|deepseek-r1:8b':
+          body:
+            reasoning_effort: none

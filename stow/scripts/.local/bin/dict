@@ -1,0 +1,12 @@
+#!/usr/bin/bash
+
+RTP='$HOME/Projects/vim/Dict.vim'
+
+case "$2" in
+		"-")
+				vim -es -c "set rtp+=$RTP" -c "runtime plugin/dict.vim" -c "let g:dict_std_headless=1" -c "DictStd $1" -c "qa" ;;
+		"uk")
+				vim -es -c "set rtp+=$RTP" -c "runtime plugin/dict.vim" -c "let g:dict_std_headless=1" -c "DictStd $1 uk" -c "qa" ;;
+		*)
+				vim -es -c "set rtp+=$RTP" -c "runtime plugin/dict.vim" -c "let g:dict_std_headless=1" -c "DictStd $1 us" -c "qa" ;;
+esac

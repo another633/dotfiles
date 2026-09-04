@@ -1,0 +1,14 @@
+#!/usr/bin/bash
+
+arch=$(uname -m)
+
+if [ "$arch" = "x86_64" ]; then
+	/usr/share/eusoft-eudic/AppRun "$@" > /dev/null
+	exit 0
+fi
+
+if [ -z "$2" ]; then
+	ssh termux "~/bin/eudic $1" > /dev/null
+else
+	echo "参数过多或空"
+fi

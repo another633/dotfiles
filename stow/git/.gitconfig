@@ -1,0 +1,21 @@
+[user]
+	name = liushuan
+	email = 1665389396@qq.com
+[core]
+	editor = vim
+	quotepath = false
+[alias]
+	co = checkout
+	br = branch
+	ci = commit
+	st = status
+	unstage = reset HEAD --
+	last = log -1 HEAD
+[include]
+	path = ~/.config/dotfiles/local/gitconfig
+
+[init]
+	defaultBranch = main
+
+[pull]
+	ff = only

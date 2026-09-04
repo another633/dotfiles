@@ -1,0 +1,36 @@
+#!/usr/bin/bash
+
+PROXY_PATH="$HOME/.cache/proxy"
+
+PROXIES=$(curl -s http://127.0.0.1:9090/proxies/Proxies | jq)
+
+set_proxy() {
+	# get proxies list in Proxies group
+	PROXY=$(echo "$PROXIES" | jq -r '.all[]' | fzf)
+
+	# set proxy
+	curl -s http://127.0.0.1:9090/proxies/Proxies -d "{\"name\": \"$PROXY\"}" -X PUT
+
+  # print current proxy
+  curl -s http://127.0.0.1:9090/proxies/Proxies | jq -r '.now'
+
+	# save current proxy
+  echo "$PROXY" > "$PROXY_PATH"
+
+	# refresh i3status
+	if command -v i3status > /dev/null && pgrep -x i3status > /dev/null ; then
+		killall -USR1 i3status
+	fi
+}
+
+while getopts ":pn" opt; do
+    case "$opt" in
+        p) echo "$PROXIES" ; exit ;;
+        n) curl -s http://127.0.0.1:9090/proxies/Proxies | jq -r '.now' ; exit ;;
+        *) echo "用法: $0 -p (打印代理信息)";
+			     echo "用法: $0 -n (显示当前代理)";
+					 exit 1 ;;
+    esac
+done
+
+set_proxy

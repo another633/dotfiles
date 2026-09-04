@@ -1,0 +1,4 @@
+# 在此添加桌面环境使用的 Stow 包。
+sway
+i3status
+wob

@@ -1,0 +1,4 @@
+# 示例：node lts、python 3.13、go 1.25
+node lts
+rust latest
+dotnet 10

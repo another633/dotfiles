@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+DOTFILES_ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
+export DOTFILES_ROOT
+
+# shellcheck source=lib/core.sh
+source "$DOTFILES_ROOT/lib/core.sh"
+# shellcheck source=lib/profiles.sh
+source "$DOTFILES_ROOT/lib/profiles.sh"
+# shellcheck source=lib/actions.sh
+source "$DOTFILES_ROOT/lib/actions.sh"
+
+usage() {
+  cat <<'EOF'
+Usage:
+  ./dot bootstrap [--profile NAME ...]
+  ./dot check [--profile NAME ...]
+  ./dot apply [--profile NAME ...]
+  ./dot unstow [--profile NAME ...]
+  ./dot list
+
+Options:
+  -p, --profile NAME  Use a profile (repeatable)
+  -h, --help          Show this help
+EOF
+}
+
+main() {
+  (($# > 0)) || { usage; return 2; }
+  local command=$1
+  shift
+
+  case "$command" in
+    -h|--help|help) usage; return 0 ;;
+    list)
+      (($# == 0)) || die "list does not accept arguments"
+      list_profiles
+      return
+      ;;
+    bootstrap|check|apply|unstow) ;;
+    *) die "unknown command: $command" ;;
+  esac
+
+  local -a requested=()
+  while (($#)); do
+    case "$1" in
+      -p|--profile)
+        (($# >= 2)) || die "$1 requires a profile name"
+        requested+=("$2")
+        shift 2
+        ;;
+      -h|--help) usage; return 0 ;;
+      *) die "unknown option: $1" ;;
+    esac
+  done
+
+  if ((${#requested[@]} == 0)); then
+    if [[ $command == bootstrap && ! -f $DOTFILES_PROFILE_FILE ]]; then
+      requested=(base dev desktop)
+    else
+      mapfile -t requested < <(load_saved_profiles)
+    fi
+  fi
+  ((${#requested[@]})) || die "no profiles selected; pass --profile NAME"
+
+  resolve_profiles "${requested[@]}"
+  case "$command" in
+    bootstrap) bootstrap "${requested[@]}" ;;
+    check) check_all ;;
+    apply) apply_all ;;
+    unstow) unstow_all ;;
+  esac
+}
+
+main "$@"

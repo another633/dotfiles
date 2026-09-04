@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# Debian -> Termux 剪贴板桥接命令
+# 用法：
+#   clip                → 获取剪贴板内容
+#   clip "文本内容"      → 设置剪贴板内容
+#   echo "内容" | clip  → 管道输入设置剪贴板
+ARCH=$(uname -m)
+
+# default termux clipboard
+CLIPBOARD_SET='ssh termux "termux-clipboard-set"'
+CLIPBOARD_GET='ssh termux "termux-clipboard-get"'
+
+if [ "$ARCH" = "x86_64" ]; then
+	CLIPBOARD_SET="wl-copy"
+	CLIPBOARD_GET="wl-paste"
+fi
+
+if [ -p /dev/stdin ]; then
+    # 管道输入
+		$CLIPBOARD_SET < /dev/stdin
+elif [ $# -gt 0 ]; then
+    # 命令行参数
+    printf '%s\n' "$*" | $CLIPBOARD_SET
+else
+    # 无参数 → 获取剪贴板
+		$CLIPBOARD_GET
+fi

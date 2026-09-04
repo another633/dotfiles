@@ -1,0 +1,144 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)
+failures=0
+
+assert_eq() {
+  local expected=$1 actual=$2 message=$3
+  if [[ $expected != "$actual" ]]; then
+    printf 'FAIL: %s (expected %q, got %q)\n' "$message" "$expected" "$actual" >&2
+    failures=$((failures + 1))
+  fi
+}
+
+for file in "$ROOT/dot" "$ROOT"/lib/*.sh "$ROOT"/modules/source/*.sh "$ROOT"/modules/system/*.sh "$ROOT/tests/run.sh"; do
+  bash -n "$file" || failures=$((failures + 1))
+done
+
+export DOTFILES_ROOT=$ROOT
+export HOME
+HOME=$(mktemp -d)
+trap 'rm -rf -- "$HOME"' EXIT
+# shellcheck source=../lib/core.sh
+source "$ROOT/lib/core.sh"
+# shellcheck source=../lib/profiles.sh
+source "$ROOT/lib/profiles.sh"
+
+resolve_profiles desktop dev base
+assert_eq 'base desktop dev' "${RESOLVED_PROFILES[*]}" 'profiles resolve dependencies once and in order'
+
+mapfile -t apt_items < <(profile_items apt)
+assert_eq 'ca-certificates' "${apt_items[0]}" 'base packages come first'
+[[ " ${apt_items[*]} " == *' build-essential '* ]] || {
+  printf 'FAIL: development package is not included\n' >&2
+  failures=$((failures + 1))
+}
+
+mapfile -t source_items < <(profile_items source)
+[[ " ${source_items[*]} " == *' vim '* ]] || {
+  printf 'FAIL: Vim source module is not included\n' >&2
+  failures=$((failures + 1))
+}
+[[ " ${source_items[*]} " == *' yazi '* ]] || {
+  printf 'FAIL: Yazi source module is not included\n' >&2
+  failures=$((failures + 1))
+}
+[[ " ${source_items[*]} " == *' aichat '* ]] || {
+  printf 'FAIL: AIChat source module is not included\n' >&2
+  failures=$((failures + 1))
+}
+
+mapfile -t system_items < <(profile_items system)
+[[ " ${system_items[*]} " == *' google-chrome '* ]] || {
+  printf 'FAIL: Google Chrome system module is not included\n' >&2
+  failures=$((failures + 1))
+}
+mapfile -t flatpak_items < <(profile_items flatpak)
+[[ " ${flatpak_items[*]} " == *' app.zen_browser.zen '* ]] || {
+  printf 'FAIL: Zen Browser Flatpak is not included\n' >&2
+  failures=$((failures + 1))
+}
+
+save_profiles base dev
+assert_eq $'base\ndev' "$(load_saved_profiles)" 'selected profiles persist outside the repository'
+
+list_output=$("$ROOT/dot" list)
+[[ $list_output == *base* && $list_output == *desktop* && $list_output == *dev* ]] || {
+  printf 'FAIL: list does not show every initial profile\n' >&2
+  failures=$((failures + 1))
+}
+
+if "$ROOT/dot" check --profile does-not-exist >/dev/null 2>&1; then
+  printf 'FAIL: unknown profile was accepted\n' >&2
+  failures=$((failures + 1))
+fi
+
+git config --file "$ROOT/stow/git/.gitconfig" --list >/dev/null || failures=$((failures + 1))
+
+stow_ignore_count=$(grep -c -- '--ignore="$STOW_IGNORE_REGEX"' "$ROOT/lib/actions.sh")
+assert_eq '3' "$stow_ignore_count" 'all Stow operations ignore Vim swap files'
+stow_no_folding_count=$(grep -c -- '--no-folding' "$ROOT/lib/actions.sh")
+assert_eq '3' "$stow_no_folding_count" 'all Stow operations disable directory folding'
+
+vim_install="$HOME/.local/opt/vim/v9.2.1036"
+mkdir -p "$vim_install/bin" "$HOME/.local/bin"
+printf '%s\n' '#!/usr/bin/env bash' "cat <<'EOF'" \
+  'VIM - Vi IMproved 9.2' \
+  'Included patches: 1-1036' \
+  'Huge version without GUI.' \
+  '+lua +python3 +perl -ruby -tcl +terminal +clipboard +X11 +xterm_clipboard +wayland +wayland_clipboard' \
+  'EOF' > "$vim_install/bin/vim"
+chmod +x "$vim_install/bin/vim"
+for command in vimdiff view ex rvim rview xxd; do
+  ln -s vim "$vim_install/bin/$command"
+done
+ln -s "$vim_install" "$HOME/.local/opt/vim/current"
+for command in vim vimdiff view ex rvim rview xxd; do
+  ln -s "$HOME/.local/opt/vim/current/bin/$command" "$HOME/.local/bin/$command"
+done
+"$ROOT/modules/source/vim.sh" check >/dev/null || {
+  printf 'FAIL: valid Vim installation was rejected\n' >&2
+  failures=$((failures + 1))
+}
+sed -i 's/ +X11//' "$vim_install/bin/vim"
+if "$ROOT/modules/source/vim.sh" check >/dev/null 2>&1; then
+  printf 'FAIL: Vim without X11 clipboard support was accepted\n' >&2
+  failures=$((failures + 1))
+fi
+
+printf '%s\n' '#!/usr/bin/env bash' 'printf "bookokrat 0.3.12\\n"' > "$HOME/.local/bin/bookokrat"
+chmod +x "$HOME/.local/bin/bookokrat"
+"$ROOT/modules/source/bookokrat.sh" check >/dev/null || {
+  printf 'FAIL: valid Bookokrat installation was rejected\n' >&2
+  failures=$((failures + 1))
+}
+
+for command in yazi ya; do
+  printf '%s\n' '#!/usr/bin/env bash' "printf '$command 26.1.22\\n'" > "$HOME/.local/bin/$command"
+  chmod +x "$HOME/.local/bin/$command"
+done
+"$ROOT/modules/source/yazi.sh" check >/dev/null || {
+  printf 'FAIL: valid Yazi installation was rejected\n' >&2
+  failures=$((failures + 1))
+}
+
+printf '%s\n' '#!/usr/bin/env bash' 'printf "ttyper 1.6.1\\n"' > "$HOME/.local/bin/ttyper"
+chmod +x "$HOME/.local/bin/ttyper"
+"$ROOT/modules/source/ttyper.sh" check >/dev/null || {
+  printf 'FAIL: valid Ttyper installation was rejected\n' >&2
+  failures=$((failures + 1))
+}
+
+printf '%s\n' '#!/usr/bin/env bash' 'printf "aichat 0.30.0\\n"' > "$HOME/.local/bin/aichat"
+chmod +x "$HOME/.local/bin/aichat"
+"$ROOT/modules/source/aichat.sh" check >/dev/null || {
+  printf 'FAIL: valid AIChat installation was rejected\n' >&2
+  failures=$((failures + 1))
+}
+
+if ((failures)); then
+  printf '%d test(s) failed\n' "$failures" >&2
+  exit 1
+fi
+printf 'All tests passed\n'

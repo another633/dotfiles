@@ -1,0 +1,5 @@
+# 主机本地文件必须存放在仓库外的以下目录：
+# ${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles/local/
+
+*.swp
+*~

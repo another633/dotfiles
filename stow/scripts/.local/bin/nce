@@ -1,0 +1,3 @@
+#!/usr/bin/bash
+
+vim -c "NCE $1 $2"

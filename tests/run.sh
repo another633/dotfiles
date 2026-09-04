@@ -16,6 +16,7 @@ for file in "$ROOT/dot" "$ROOT"/lib/*.sh "$ROOT"/modules/source/*.sh "$ROOT"/mod
   bash -n "$file" || failures=$((failures + 1))
 done
 bash -n "$ROOT/stow/scripts/.local/bin/clash" || failures=$((failures + 1))
+bash -n "$ROOT/stow/scripts/.local/bin/reader" || failures=$((failures + 1))
 python3 -c 'import ast, pathlib, sys; ast.parse(pathlib.Path(sys.argv[1]).read_text())' \
   "$ROOT/stow/scripts/.local/libexec/dotfiles/clash-upload.py" || failures=$((failures + 1))
 grep -q 'name="viewport"' "$ROOT/stow/scripts/.local/libexec/dotfiles/clash-upload.py" || {
@@ -51,6 +52,49 @@ load_proxy_config
 assert_eq 'http://127.0.0.1:7890' "$https_proxy" 'saved proxy configuration is loaded'
 assert_eq 'localhost,127.0.0.1,::1' "$NO_PROXY" 'local addresses bypass the proxy'
 assert_eq '600' "$(stat -c '%a' "$DOTFILES_PROXY_FILE")" 'proxy configuration permissions are private'
+
+reader_script=$ROOT/stow/scripts/.local/bin/reader
+reader_home=$HOME/reader-home
+reader_library=$reader_home/Books
+reader_bin=$reader_home/bin
+mkdir -p "$reader_library/子目录" "$reader_bin"
+touch "$reader_library/A book.epub" "$reader_library/子目录/Z.pdf" \
+  "$reader_library/ignore.txt"
+printf '%s\n' '#!/usr/bin/env bash' \
+  'cat > "$READER_FZF_INPUT"' \
+  'if [[ ${READER_FZF_CANCEL:-0} == 1 ]]; then exit 1; fi' \
+  'if [[ ${READER_FZF_PICK:-first} == last ]]; then tail -n 1 "$READER_FZF_INPUT"; else head -n 1 "$READER_FZF_INPUT"; fi' \
+  > "$reader_bin/fzf"
+printf '%s\n' '#!/usr/bin/env bash' \
+  'printf "%s\n" "$@" > "$READER_BOOKOKRAT_ARGS"' \
+  > "$reader_bin/bookokrat"
+chmod +x "$reader_bin/fzf" "$reader_bin/bookokrat"
+reader_fzf_input=$reader_home/fzf-input
+reader_args=$reader_home/bookokrat-args
+printf '%s\n' "$reader_library" | env \
+  HOME=$reader_home PATH=$reader_bin:$PATH \
+  READER_FZF_INPUT=$reader_fzf_input READER_BOOKOKRAT_ARGS=$reader_args \
+  "$reader_script"
+assert_eq '700' "$(stat -c '%a' "$reader_home/.config/reader")" 'reader config directory is private'
+assert_eq '600' "$(stat -c '%a' "$reader_home/.config/reader/config.yaml")" 'reader config is private'
+assert_eq '2' "$(wc -l < "$reader_fzf_input")" 'reader discovers only EPUB and PDF files'
+assert_eq '--zen-mode' "$(sed -n '1p' "$reader_args")" 'reader enables Bookokrat zen mode'
+assert_eq '--' "$(sed -n '2p' "$reader_args")" 'reader separates Bookokrat options from the file'
+assert_eq "$reader_library/A book.epub" "$(sed -n '3p' "$reader_args")" 'reader opens the selected book'
+env HOME=$reader_home PATH=$reader_bin:$PATH READER_FZF_PICK=last \
+  READER_FZF_INPUT=$reader_fzf_input READER_BOOKOKRAT_ARGS=$reader_args \
+  "$reader_script"
+env HOME=$reader_home PATH=$reader_bin:$PATH \
+  READER_FZF_INPUT=$reader_fzf_input READER_BOOKOKRAT_ARGS=$reader_args \
+  "$reader_script"
+assert_eq "$reader_library/子目录/Z.pdf" "$(sed -n '1p' "$reader_fzf_input")" \
+  'reader puts the recent book first'
+reader_config_before=$(sha256sum "$reader_home/.config/reader/config.yaml")
+env HOME=$reader_home PATH=$reader_bin:$PATH READER_FZF_CANCEL=1 \
+  READER_FZF_INPUT=$reader_fzf_input READER_BOOKOKRAT_ARGS=$reader_args \
+  "$reader_script"
+assert_eq "$reader_config_before" "$(sha256sum "$reader_home/.config/reader/config.yaml")" \
+  'reader cancellation preserves its config'
 
 clash_helper=$ROOT/stow/scripts/.local/libexec/dotfiles/clash-upload.py
 clash_config=$HOME/mihomo-test.yaml

@@ -1,0 +1,154 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+CONFIG_DIR=$HOME/.config/reader
+CONFIG_FILE=$CONFIG_DIR/config.yaml
+
+die() {
+  printf 'reader: %s\n' "$*" >&2
+  exit 1
+}
+
+require_commands() {
+  local command
+  for command in fzf python3 bookokrat; do
+    command -v "$command" >/dev/null 2>&1 || die "缺少命令：$command"
+  done
+}
+
+normalize_directory() {
+  local directory=$1
+  case $directory in
+    '~') directory=$HOME ;;
+    '~/'*) directory=$HOME/${directory#\~/} ;;
+  esac
+  [[ -d $directory ]] || die "电子书目录不存在：$directory"
+  (cd -- "$directory" && pwd -P)
+}
+
+write_config() {
+  local book_directory=$1 recent_book=${2:-}
+  mkdir -p -- "$CONFIG_DIR"
+  chmod 700 -- "$CONFIG_DIR"
+  python3 - "$CONFIG_FILE" "$book_directory" "$recent_book" <<'PY'
+import json
+import os
+import pathlib
+import sys
+import tempfile
+
+target = pathlib.Path(sys.argv[1])
+content = (
+    f"book_directory: {json.dumps(sys.argv[2], ensure_ascii=False)}\n"
+    f"recent_book: {json.dumps(sys.argv[3], ensure_ascii=False)}\n"
+)
+with tempfile.NamedTemporaryFile(
+    mode="w", encoding="utf-8", dir=target.parent, delete=False
+) as stream:
+    stream.write(content)
+    temporary = stream.name
+os.chmod(temporary, 0o600)
+os.replace(temporary, target)
+PY
+}
+
+read_config() {
+  local parsed
+  local -a config_values
+  parsed=$(
+    python3 - "$CONFIG_FILE" <<'PY'
+import json
+import pathlib
+import sys
+
+path = pathlib.Path(sys.argv[1])
+values = {}
+for number, raw_line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+    line = raw_line.strip()
+    if not line or line.startswith("#"):
+        continue
+    if ":" not in line:
+        raise SystemExit(f"第 {number} 行缺少冒号")
+    key, encoded = line.split(":", 1)
+    key = key.strip()
+    if key not in {"book_directory", "recent_book"} or key in values:
+        raise SystemExit(f"第 {number} 行包含未知或重复字段")
+    try:
+        value = json.loads(encoded.strip())
+    except json.JSONDecodeError as error:
+        raise SystemExit(f"第 {number} 行不是有效的 YAML 字符串") from error
+    if not isinstance(value, str) or "\n" in value:
+        raise SystemExit(f"第 {number} 行必须是单行字符串")
+    values[key] = value
+if not values.get("book_directory"):
+    raise SystemExit("缺少 book_directory")
+print(values["book_directory"])
+print(values.get("recent_book", ""))
+print(".")
+PY
+  ) || die "配置文件格式无效：$CONFIG_FILE"
+  mapfile -t config_values <<< "$parsed"
+  BOOK_DIRECTORY=$(normalize_directory "${config_values[0]}")
+  RECENT_BOOK=${config_values[1]:-}
+}
+
+initialize_config() {
+  local directory
+  printf '首次运行，需要设置电子书目录。\n' >&2
+  read -r -p "电子书目录 [$HOME/Books]: " directory \
+    || die "未读取到电子书目录"
+  directory=${directory:-$HOME/Books}
+  directory=$(normalize_directory "$directory")
+  write_config "$directory" ''
+}
+
+load_config() {
+  [[ -f $CONFIG_FILE ]] || initialize_config
+  read_config
+}
+
+find_books() {
+  mapfile -d '' -t BOOKS < <(
+    find "$BOOK_DIRECTORY" -type f \
+      \( -iname '*.epub' -o -iname '*.pdf' \) -print0 | LC_ALL=C sort -z
+  )
+  ((${#BOOKS[@]})) || die "电子书目录中没有 EPUB 或 PDF：$BOOK_DIRECTORY"
+}
+
+order_books() {
+  local book
+  ORDERED_BOOKS=()
+  if [[ -n $RECENT_BOOK ]]; then
+    for book in "${BOOKS[@]}"; do
+      if [[ $book == "$RECENT_BOOK" ]]; then
+        ORDERED_BOOKS+=("$book")
+        break
+      fi
+    done
+  fi
+  for book in "${BOOKS[@]}"; do
+    [[ $book != *$'\n'* ]] || die "暂不支持文件名中包含换行符：$book"
+    [[ $book == "$RECENT_BOOK" ]] || ORDERED_BOOKS+=("$book")
+  done
+}
+
+choose_book() {
+  local selected
+  selected=$(printf '%s\n' "${ORDERED_BOOKS[@]}" \
+    | fzf --prompt='电子书> ' --header='第一项为最近阅读') || return 1
+  [[ -n $selected ]] || return 1
+  printf '%s\n' "$selected"
+}
+
+main() {
+  local selected
+  require_commands
+  load_config
+  find_books
+  order_books
+  selected=$(choose_book) || return 0
+  write_config "$BOOK_DIRECTORY" "$selected"
+  exec bookokrat --zen-mode -- "$selected"
+}
+
+[[ ${READER_LIBRARY_ONLY:-0} == 1 ]] || main "$@"

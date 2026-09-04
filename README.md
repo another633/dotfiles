@@ -3,6 +3,9 @@
 一套面向 Debian 11+ 的轻量 dotfiles 框架：GNU Stow 管理用户配置，Profile
 组合软件与功能，显式模块处理少量系统设置。
 
+完整的框架设计、执行顺序、Profile 和扩展规则见
+[`docs/framework.md`](docs/framework.md)。
+
 ## 快速开始
 
 ```sh

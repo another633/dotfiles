@@ -63,6 +63,27 @@ choose_proxy() {
   refresh_i3status
 }
 
+record_lan_settings() {
+  local current
+  current=$(api_request GET /configs) || die "无法读取 Mihomo 当前配置"
+  ORIGINAL_ALLOW_LAN=$(jq -er \
+    '.["allow-lan"] | select(type == "boolean") | tostring' <<< "$current") \
+    || die "Mihomo API 返回的 allow-lan 无效"
+  ORIGINAL_MIXED_PORT=$(jq -er \
+    '.["mixed-port"] | select(type == "number" and . >= 1 and . <= 65535 and . == floor) | tostring' \
+    <<< "$current") || die "Mihomo API 返回的 mixed-port 无效"
+}
+
+default_mixed_port() {
+  local current=$1 port
+  port=$(jq -r '.["mixed-port"] // empty' <<< "$current")
+  if [[ $port =~ ^[0-9]+$ && $port -ge 1 && $port -le 65535 ]]; then
+    printf '%s\n' "$port"
+  else
+    printf '%s\n' '7893'
+  fi
+}
+
 install_config() {
   local candidate=$1 timestamp backup
   timestamp=$(date +%Y%m%d%H%M%S)
@@ -89,11 +110,12 @@ install_config() {
 }
 
 configure_lan() {
-  local current choice allow_lan port candidate
+  local current choice allow_lan port default_port candidate
   current=$(api_request GET /configs) || die "无法读取 Mihomo 配置"
+  default_port=$(default_mixed_port "$current")
   printf '当前状态：allow-lan=%s，mixed-port=%s\n' \
     "$(jq -r '.["allow-lan"]' <<< "$current")" \
-    "$(jq -r '.["mixed-port"]' <<< "$current")"
+    "$default_port"
   choice=$(printf '%s\n' '开启局域网代理' '关闭局域网代理' \
     | fzf --prompt='局域网代理> ') || return 0
   case $choice in
@@ -101,7 +123,8 @@ configure_lan() {
     关闭*) allow_lan=false ;;
     *) return 0 ;;
   esac
-  read -r -p 'mixed-port（1-65535）: ' port
+  read -r -p "mixed-port（1-65535）[$default_port]: " port
+  port=${port:-$default_port}
   [[ $port =~ ^[0-9]+$ && $port -ge 1 && $port -le 65535 ]] \
     || die "mixed-port 必须是 1 到 65535 之间的整数"
   TEMP_DIR=$(mktemp -d)
@@ -120,6 +143,9 @@ lan_ipv4() {
 upload_config() {
   [[ -x $UPLOAD_HELPER ]] || die "缺少上传助手：$UPLOAD_HELPER"
   local port token address url uploaded ready
+  record_lan_settings
+  printf '将保留当前设置：allow-lan=%s，mixed-port=%s\n' \
+    "$ORIGINAL_ALLOW_LAN" "$ORIGINAL_MIXED_PORT"
   read -r -p '上传服务端口 [8080]: ' port
   port=${port:-8080}
   [[ $port =~ ^[0-9]+$ && $port -ge 1024 && $port -le 65535 ]] \
@@ -146,6 +172,8 @@ upload_config() {
   wait "$UPLOAD_PID" || die "上传服务异常退出"
   UPLOAD_PID=
   [[ -s $uploaded ]] || die "未收到配置文件"
+  python3 "$UPLOAD_HELPER" patch --config "$uploaded" \
+    --allow-lan "$ORIGINAL_ALLOW_LAN" --mixed-port "$ORIGINAL_MIXED_PORT"
   install_config "$uploaded"
 }
 
@@ -160,12 +188,17 @@ show_menu() {
   esac
 }
 
-while getopts ':pn' option; do
-  case $option in
-    p) get_proxy_group | jq; exit ;;
-    n) get_proxy_group | jq -r '.now'; exit ;;
-    *) printf '用法：%s [-p|-n]\n' "$0" >&2; exit 1 ;;
-  esac
-done
+main() {
+  local option
+  while getopts ':pn' option; do
+    case $option in
+      p) get_proxy_group | jq; return ;;
+      n) get_proxy_group | jq -r '.now'; return ;;
+      *) printf '用法：%s [-p|-n]\n' "$0" >&2; return 1 ;;
+    esac
+  done
 
-show_menu
+  show_menu
+}
+
+[[ ${CLASH_LIBRARY_ONLY:-0} == 1 ]] || main "$@"

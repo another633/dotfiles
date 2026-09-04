@@ -65,6 +65,34 @@ clash_token=$(python3 "$clash_helper" token)
   failures=$((failures + 1))
 }
 
+clash_script=$ROOT/stow/scripts/.local/bin/clash
+preserved_settings=$(bash -c '
+  export CLASH_LIBRARY_ONLY=1
+  source "$1"
+  api_request() { printf "%s\\n" '\''{"allow-lan":true,"mixed-port":7893}'\''; }
+  record_lan_settings
+  printf "%s %s\\n" "$ORIGINAL_ALLOW_LAN" "$ORIGINAL_MIXED_PORT"
+' _ "$clash_script")
+assert_eq 'true 7893' "$preserved_settings" 'clash records current LAN settings'
+port_defaults=$(bash -c '
+  export CLASH_LIBRARY_ONLY=1
+  source "$1"
+  printf "%s %s %s\\n" \
+    "$(default_mixed_port '\''{"mixed-port":7894}'\'')" \
+    "$(default_mixed_port '\''{}'\'')" \
+    "$(default_mixed_port '\''{"mixed-port":"invalid"}'\'')"
+' _ "$clash_script")
+assert_eq '7894 7893 7893' "$port_defaults" 'clash selects the current or fallback port'
+if bash -c '
+  export CLASH_LIBRARY_ONLY=1
+  source "$1"
+  api_request() { printf "%s\\n" '\''{"allow-lan":"yes","mixed-port":70000}'\''; }
+  record_lan_settings
+' _ "$clash_script" >/dev/null 2>&1; then
+  printf 'FAIL: clash accepted invalid current LAN settings\n' >&2
+  failures=$((failures + 1))
+fi
+
 GITHUB_RELEASE_TEMP_DIR=$(mktemp -d)
 printf '%s\n' '#!/usr/bin/env bash' 'printf "fixture\\n"' > "$GITHUB_RELEASE_TEMP_DIR/fixture"
 tar -czf "$GITHUB_RELEASE_TEMP_DIR/fixture.tar.gz" -C "$GITHUB_RELEASE_TEMP_DIR" fixture

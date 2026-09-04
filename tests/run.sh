@@ -64,6 +64,10 @@ mapfile -t source_items < <(profile_items source)
   printf 'FAIL: Vim source module is not included\n' >&2
   failures=$((failures + 1))
 }
+[[ " ${source_items[*]} " == *' ohmyzsh '* ]] || {
+  printf 'FAIL: Oh My Zsh source module is not included\n' >&2
+  failures=$((failures + 1))
+}
 [[ " ${source_items[*]} " == *' yazi '* ]] || {
   printf 'FAIL: Yazi source module is not included\n' >&2
   failures=$((failures + 1))
@@ -156,6 +160,15 @@ printf '%s\n' '#!/usr/bin/env bash' 'printf "aichat 0.30.0\\n"' > "$HOME/.local/
 chmod +x "$HOME/.local/bin/aichat"
 "$ROOT/modules/source/aichat.sh" check >/dev/null || {
   printf 'FAIL: valid AIChat installation was rejected\n' >&2
+  failures=$((failures + 1))
+}
+
+ohmyzsh_install="$HOME/.local/share/oh-my-zsh/9112b53fa8b5ab556c7c893aa8be8a247ac512a0"
+mkdir -p "$ohmyzsh_install"
+printf '%s\n' '# Oh My Zsh test fixture' > "$ohmyzsh_install/oh-my-zsh.sh"
+ln -s "$ohmyzsh_install" "$HOME/.local/share/oh-my-zsh/current"
+"$ROOT/modules/source/ohmyzsh.sh" check >/dev/null || {
+  printf 'FAIL: valid Oh My Zsh installation was rejected\n' >&2
   failures=$((failures + 1))
 }
 

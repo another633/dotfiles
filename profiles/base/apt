@@ -16,3 +16,5 @@ silversearcher-ag
 universal-ctags
 zoxide
 zsh
+zsh-autosuggestions
+zsh-syntax-highlighting

@@ -58,6 +58,10 @@ Bookokrat、Yazi 和 Ttyper 使用固定版本与 SHA-256 的 GitHub Release 二
 `~/.local/bin/`。升级 Vim 时同时修改模块中的 tag 和 commit；框架不会自动删除
 旧版本，便于手动回滚。
 
+`base` Profile 安装 Zsh、`zsh-autosuggestions` 和 `zsh-syntax-highlighting`，
+并从官方 GitHub 归档安装固定提交的 Oh My Zsh。框架位于
+`~/.local/share/oh-my-zsh/current`，不会自动修改用户的登录 shell。
+
 系统模块是可执行 Bash 脚本，接受 `check` 或 `apply`。模块必须保证幂等，只能
 对明确目标使用 `sudo`；修改已有系统文件前应通过 `backup_file` 创建一次备份。
 `desktop` Profile 从 Google 官网下载 DEB 安装 Chrome，从 Zen Browser 官方

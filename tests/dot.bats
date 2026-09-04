@@ -33,6 +33,15 @@ setup() {
   [ "$status" -eq 0 ]
 }
 
+@test "base profile declares Zsh tooling" {
+  run grep -Fx zsh-autosuggestions "$ROOT/profiles/base/apt"
+  [ "$status" -eq 0 ]
+  run grep -Fx zsh-syntax-highlighting "$ROOT/profiles/base/apt"
+  [ "$status" -eq 0 ]
+  run grep -Fx ohmyzsh "$ROOT/profiles/base/source"
+  [ "$status" -eq 0 ]
+}
+
 @test "dev profile declares the Bookokrat source module" {
   run grep -Fx bookokrat "$ROOT/profiles/dev/source"
   [ "$status" -eq 0 ]

@@ -22,4 +22,5 @@ libxt-dev
 pkgconf
 python3
 python3-dev
+unzip
 wayland-protocols

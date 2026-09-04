@@ -170,6 +170,7 @@ apply_stow() {
 
 apply_all() {
   require_debian
+  prepare_proxy_environment
   log "applying profiles: ${RESOLVED_PROFILES[*]}"
   validate_mise_manifest
   install_apt_packages
@@ -185,6 +186,7 @@ apply_all() {
 bootstrap() {
   local -a selected=("$@")
   require_debian
+  prepare_proxy_environment
   install_apt_packages
   [[ -n $(profile_items mise) ]] && install_mise
   apply_all

@@ -66,6 +66,6 @@ setup() {
 @test "desktop profile declares Google Chrome and Zen Browser" {
   run grep -Fx google-chrome "$ROOT/profiles/desktop/system"
   [ "$status" -eq 0 ]
-  run grep -Fx app.zen_browser.zen "$ROOT/profiles/desktop/flatpak"
+  run grep -Fx zen-browser "$ROOT/profiles/desktop/source"
   [ "$status" -eq 0 ]
 }

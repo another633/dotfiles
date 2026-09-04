@@ -16,6 +16,13 @@ for file in "$ROOT/dot" "$ROOT"/lib/*.sh "$ROOT"/modules/source/*.sh "$ROOT"/mod
   bash -n "$file" || failures=$((failures + 1))
 done
 
+if grep -H 'cargo install' "$ROOT/modules/source/aichat.sh" \
+  "$ROOT/modules/source/bookokrat.sh" "$ROOT/modules/source/yazi.sh" \
+  "$ROOT/modules/source/ttyper.sh" >/dev/null; then
+  printf 'FAIL: a GitHub binary module still invokes cargo install\n' >&2
+  failures=$((failures + 1))
+fi
+
 export DOTFILES_ROOT=$ROOT
 export HOME
 HOME=$(mktemp -d)
@@ -24,6 +31,23 @@ trap 'rm -rf -- "$HOME"' EXIT
 source "$ROOT/lib/core.sh"
 # shellcheck source=../lib/profiles.sh
 source "$ROOT/lib/profiles.sh"
+# shellcheck source=../lib/github-release.sh
+source "$ROOT/lib/github-release.sh"
+
+write_proxy_config 'http://127.0.0.1:7890'
+unset http_proxy https_proxy all_proxy no_proxy HTTP_PROXY HTTPS_PROXY ALL_PROXY NO_PROXY
+load_proxy_config
+assert_eq 'http://127.0.0.1:7890' "$https_proxy" 'saved proxy configuration is loaded'
+assert_eq 'localhost,127.0.0.1,::1' "$NO_PROXY" 'local addresses bypass the proxy'
+assert_eq '600' "$(stat -c '%a' "$DOTFILES_PROXY_FILE")" 'proxy configuration permissions are private'
+
+GITHUB_RELEASE_TEMP_DIR=$(mktemp -d)
+printf '%s\n' '#!/usr/bin/env bash' 'printf "fixture\\n"' > "$GITHUB_RELEASE_TEMP_DIR/fixture"
+tar -czf "$GITHUB_RELEASE_TEMP_DIR/fixture.tar.gz" -C "$GITHUB_RELEASE_TEMP_DIR" fixture
+GITHUB_RELEASE_ARCHIVE=$GITHUB_RELEASE_TEMP_DIR/fixture.tar.gz
+install_tar_binary fixture "$HOME/.local-fixture"
+assert_eq 'fixture' "$($HOME/.local-fixture)" 'GitHub tar binary is extracted and installed'
+cleanup_github_release
 
 resolve_profiles desktop dev base
 assert_eq 'base desktop dev' "${RESOLVED_PROFILES[*]}" 'profiles resolve dependencies once and in order'
@@ -48,18 +72,16 @@ mapfile -t source_items < <(profile_items source)
   printf 'FAIL: AIChat source module is not included\n' >&2
   failures=$((failures + 1))
 }
+[[ " ${source_items[*]} " == *' zen-browser '* ]] || {
+  printf 'FAIL: Zen Browser source module is not included\n' >&2
+  failures=$((failures + 1))
+}
 
 mapfile -t system_items < <(profile_items system)
 [[ " ${system_items[*]} " == *' google-chrome '* ]] || {
   printf 'FAIL: Google Chrome system module is not included\n' >&2
   failures=$((failures + 1))
 }
-mapfile -t flatpak_items < <(profile_items flatpak)
-[[ " ${flatpak_items[*]} " == *' app.zen_browser.zen '* ]] || {
-  printf 'FAIL: Zen Browser Flatpak is not included\n' >&2
-  failures=$((failures + 1))
-}
-
 save_profiles base dev
 assert_eq $'base\ndev' "$(load_saved_profiles)" 'selected profiles persist outside the repository'
 
@@ -115,7 +137,7 @@ chmod +x "$HOME/.local/bin/bookokrat"
 }
 
 for command in yazi ya; do
-  printf '%s\n' '#!/usr/bin/env bash' "printf '$command 26.1.22\\n'" > "$HOME/.local/bin/$command"
+  printf '%s\n' '#!/usr/bin/env bash' "printf '$command\\n    Version: 26.9.1 (test)\\n'" > "$HOME/.local/bin/$command"
   chmod +x "$HOME/.local/bin/$command"
 done
 "$ROOT/modules/source/yazi.sh" check >/dev/null || {
@@ -123,7 +145,7 @@ done
   failures=$((failures + 1))
 }
 
-printf '%s\n' '#!/usr/bin/env bash' 'printf "ttyper 1.6.1\\n"' > "$HOME/.local/bin/ttyper"
+printf '%s\n' '#!/usr/bin/env bash' 'printf "ttyper 1.6.0\\n"' > "$HOME/.local/bin/ttyper"
 chmod +x "$HOME/.local/bin/ttyper"
 "$ROOT/modules/source/ttyper.sh" check >/dev/null || {
   printf 'FAIL: valid Ttyper installation was rejected\n' >&2
@@ -136,6 +158,25 @@ chmod +x "$HOME/.local/bin/aichat"
   printf 'FAIL: valid AIChat installation was rejected\n' >&2
   failures=$((failures + 1))
 }
+
+zen_install="$HOME/.local/opt/zen-browser/1.21.16b"
+mkdir -p "$zen_install" "$HOME/.local/share/applications"
+printf '%s\n' '#!/usr/bin/env bash' > "$zen_install/zen"
+printf '%s\n' 'Version=1.21.16b' > "$zen_install/application.ini"
+chmod +x "$zen_install/zen"
+ln -s "$zen_install" "$HOME/.local/opt/zen-browser/current"
+ln -s "$HOME/.local/opt/zen-browser/current/zen" "$HOME/.local/bin/zen"
+printf '%s\n' '[Desktop Entry]' > "$HOME/.local/share/applications/zen-browser.desktop"
+"$ROOT/modules/source/zen-browser.sh" check >/dev/null || {
+  printf 'FAIL: valid Zen Browser installation was rejected\n' >&2
+  failures=$((failures + 1))
+}
+
+if grep -Eq 'google-chrome\.sources|linux_signing_key|chrome/deb/' \
+  "$ROOT/modules/system/google-chrome.sh"; then
+  printf 'FAIL: Google Chrome module still manages an APT repository\n' >&2
+  failures=$((failures + 1))
+fi
 
 if ((failures)); then
   printf '%d test(s) failed\n' "$failures" >&2

@@ -8,7 +8,8 @@ commands. Machine roles are declared under
 `profiles/{base,dev,desktop}/` using line-oriented manifests for APT, Flatpak,
 mise, Stow packages, source modules, and system modules. User configuration mirrors `$HOME`
 inside `stow/<package>/`. Privileged, idempotent operations belong in
-`modules/system/`; user-level source builds belong in `modules/source/`. Tests live in `tests/`.
+`modules/system/`; user-level source builds and binary installs belong in
+`modules/source/`. Tests live in `tests/`.
 
 ## Build, Test, and Development Commands
 

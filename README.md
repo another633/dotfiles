@@ -56,7 +56,8 @@ Bookokrat、Yazi 和 Ttyper 使用固定版本与 SHA-256 的 GitHub Release 二
 `dev` Profile 默认从
 固定源码版本编译 Vim，安装到 `~/.local/opt/vim/`，再通过 `current` 链接暴露到
 `~/.local/bin/`。升级 Vim 时同时修改模块中的 tag 和 commit；框架不会自动删除
-旧版本，便于手动回滚。
+旧版本，便于手动回滚。Vim 安装后会从官方仓库下载 vim-plug 到
+`~/.vim/autoload/plug.vim`。
 
 `base` Profile 安装 Zsh、`zsh-autosuggestions` 和 `zsh-syntax-highlighting`，
 并从官方 GitHub 归档安装固定提交的 Oh My Zsh。框架位于

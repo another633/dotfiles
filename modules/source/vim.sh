@@ -13,6 +13,8 @@ VIM_OPT_ROOT=$HOME/.local/opt/vim
 VIM_INSTALL_DIR=$VIM_OPT_ROOT/v$VIM_VERSION
 VIM_CURRENT=$VIM_OPT_ROOT/current
 VIM_BIN_DIR=$HOME/.local/bin
+VIM_PLUG=$HOME/.vim/autoload/plug.vim
+VIM_PLUG_URL=https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim
 VIM_REPOSITORY=https://github.com/vim/vim.git
 VIM_COMMANDS=(vim vimdiff view ex rvim rview xxd)
 
@@ -47,8 +49,19 @@ check_links() {
   done
 }
 
-check_vim() {
+check_vim_core() {
   verify_vim_binary "$VIM_INSTALL_DIR/bin/vim" && check_links
+}
+
+check_vim() {
+  check_vim_core && [[ -s $VIM_PLUG ]]
+}
+
+install_vim_plug() {
+  [[ -s $VIM_PLUG ]] && return 0
+  log "正在安装 vim-plug"
+  curl -fLo "$VIM_PLUG" --create-dirs "$VIM_PLUG_URL"
+  [[ -s $VIM_PLUG ]] || die "vim-plug 安装后验证失败"
 }
 
 check_link_conflicts() {
@@ -130,19 +143,25 @@ activate_vim() {
 }
 
 apply_vim() {
-  check_vim && { log "Vim $VIM_VERSION 已满足要求"; return 0; }
+  if check_vim_core; then
+    install_vim_plug
+    check_vim || die "Vim 或 vim-plug 最终验证失败"
+    log "Vim $VIM_VERSION 已满足要求"
+    return 0
+  fi
   check_link_conflicts
   prepare_source
   mkdir -p -- "$VIM_OPT_ROOT"
   build_vim
   activate_vim
+  install_vim_plug
   check_vim || die "Vim 安装后的最终验证失败"
   log "Vim $VIM_VERSION 已安装到 $VIM_INSTALL_DIR"
 }
 
 case ${1:-} in
   check)
-    check_vim || { warn "Vim $VIM_VERSION 缺失、版本不符或功能不完整"; exit 1; }
+    check_vim || { warn "Vim $VIM_VERSION 或 vim-plug 缺失、版本不符或功能不完整"; exit 1; }
     ;;
   apply) apply_vim ;;
   *) die "用法：${0##*/} check|apply" ;;

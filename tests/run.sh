@@ -132,6 +132,8 @@ ln -s "$vim_install" "$HOME/.local/opt/vim/current"
 for command in vim vimdiff view ex rvim rview xxd; do
   ln -s "$HOME/.local/opt/vim/current/bin/$command" "$HOME/.local/bin/$command"
 done
+mkdir -p "$HOME/.vim/autoload"
+printf '%s\n' '" vim-plug test fixture' > "$HOME/.vim/autoload/plug.vim"
 "$ROOT/modules/source/vim.sh" check >/dev/null || {
   printf 'FAIL: valid Vim installation was rejected\n' >&2
   failures=$((failures + 1))

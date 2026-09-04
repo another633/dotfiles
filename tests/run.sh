@@ -15,6 +15,17 @@ assert_eq() {
 for file in "$ROOT/dot" "$ROOT"/lib/*.sh "$ROOT"/modules/source/*.sh "$ROOT"/modules/system/*.sh "$ROOT/tests/run.sh"; do
   bash -n "$file" || failures=$((failures + 1))
 done
+bash -n "$ROOT/stow/scripts/.local/bin/clash" || failures=$((failures + 1))
+python3 -c 'import ast, pathlib, sys; ast.parse(pathlib.Path(sys.argv[1]).read_text())' \
+  "$ROOT/stow/scripts/.local/libexec/dotfiles/clash-upload.py" || failures=$((failures + 1))
+grep -q 'name="viewport"' "$ROOT/stow/scripts/.local/libexec/dotfiles/clash-upload.py" || {
+  printf 'FAIL: clash upload page is missing a mobile viewport\n' >&2
+  failures=$((failures + 1))
+}
+grep -q '@media (min-width: 640px)' "$ROOT/stow/scripts/.local/libexec/dotfiles/clash-upload.py" || {
+  printf 'FAIL: clash upload page is missing its desktop layout\n' >&2
+  failures=$((failures + 1))
+}
 
 if grep -H 'cargo install' "$ROOT/modules/source/aichat.sh" \
   "$ROOT/modules/source/bookokrat.sh" "$ROOT/modules/source/yazi.sh" \
@@ -40,6 +51,19 @@ load_proxy_config
 assert_eq 'http://127.0.0.1:7890' "$https_proxy" 'saved proxy configuration is loaded'
 assert_eq 'localhost,127.0.0.1,::1' "$NO_PROXY" 'local addresses bypass the proxy'
 assert_eq '600' "$(stat -c '%a' "$DOTFILES_PROXY_FILE")" 'proxy configuration permissions are private'
+
+clash_helper=$ROOT/stow/scripts/.local/libexec/dotfiles/clash-upload.py
+clash_config=$HOME/mihomo-test.yaml
+printf '%s\n' 'mixed-port: 7890' 'allow-lan: false' 'mode: rule' > "$clash_config"
+python3 "$clash_helper" patch --config "$clash_config" --allow-lan true --mixed-port 7893
+assert_eq 'mixed-port: 7893' "$(grep '^mixed-port:' "$clash_config")" 'clash updates mixed-port'
+assert_eq 'allow-lan: true' "$(grep '^allow-lan:' "$clash_config")" 'clash updates allow-lan'
+assert_eq 'mode: rule' "$(grep '^mode:' "$clash_config")" 'clash preserves unrelated config'
+clash_token=$(python3 "$clash_helper" token)
+[[ $clash_token =~ ^[A-Za-z0-9_-]+$ && ${#clash_token} -ge 24 ]] || {
+  printf 'FAIL: clash upload token is invalid\n' >&2
+  failures=$((failures + 1))
+}
 
 GITHUB_RELEASE_TEMP_DIR=$(mktemp -d)
 printf '%s\n' '#!/usr/bin/env bash' 'printf "fixture\\n"' > "$GITHUB_RELEASE_TEMP_DIR/fixture"

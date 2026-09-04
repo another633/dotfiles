@@ -1,36 +1,171 @@
-#!/usr/bin/bash
+#!/usr/bin/env bash
+set -Eeuo pipefail
 
-PROXY_PATH="$HOME/.cache/proxy"
+MIHOMO_API=${MIHOMO_API:-http://127.0.0.1:9090}
+MIHOMO_CONFIG=/etc/mihomo/config.yaml
+MIHOMO_LOCAL_CONFIG=${XDG_CONFIG_HOME:-"$HOME/.config"}/dotfiles/local/mihomo/config.yaml
+PROXY_GROUP=${MIHOMO_PROXY_GROUP:-Proxies}
+PROXY_PATH=$HOME/.cache/proxy
+UPLOAD_HELPER=$HOME/.local/libexec/dotfiles/clash-upload.py
+TEMP_DIR=
+UPLOAD_PID=
 
-PROXIES=$(curl -s http://127.0.0.1:9090/proxies/Proxies | jq)
+die() { printf '错误：%s\n' "$*" >&2; exit 1; }
+log() { printf '==> %s\n' "$*"; }
 
-set_proxy() {
-	# get proxies list in Proxies group
-	PROXY=$(echo "$PROXIES" | jq -r '.all[]' | fzf)
+cleanup() {
+  if [[ -n ${UPLOAD_PID:-} ]] && kill -0 "$UPLOAD_PID" 2>/dev/null; then
+    kill "$UPLOAD_PID" 2>/dev/null || true
+    wait "$UPLOAD_PID" 2>/dev/null || true
+  fi
+  [[ -n ${TEMP_DIR:-} && -d $TEMP_DIR ]] || return 0
+  find "$TEMP_DIR" -mindepth 1 -delete
+  rmdir -- "$TEMP_DIR"
+}
+trap cleanup EXIT INT TERM
 
-	# set proxy
-	curl -s http://127.0.0.1:9090/proxies/Proxies -d "{\"name\": \"$PROXY\"}" -X PUT
-
-  # print current proxy
-  curl -s http://127.0.0.1:9090/proxies/Proxies | jq -r '.now'
-
-	# save current proxy
-  echo "$PROXY" > "$PROXY_PATH"
-
-	# refresh i3status
-	if command -v i3status > /dev/null && pgrep -x i3status > /dev/null ; then
-		killall -USR1 i3status
-	fi
+run_root() {
+  if ((EUID == 0)); then "$@"; else sudo "$@"; fi
 }
 
-while getopts ":pn" opt; do
-    case "$opt" in
-        p) echo "$PROXIES" ; exit ;;
-        n) curl -s http://127.0.0.1:9090/proxies/Proxies | jq -r '.now' ; exit ;;
-        *) echo "用法: $0 -p (打印代理信息)";
-			     echo "用法: $0 -n (显示当前代理)";
-					 exit 1 ;;
-    esac
+api_request() {
+  local method=$1 path=$2 data=${3:-}
+  local -a args=(-fsS -X "$method")
+  [[ -z ${MIHOMO_SECRET:-} ]] || args+=(-H "Authorization: Bearer $MIHOMO_SECRET")
+  [[ -z $data ]] || args+=(-H 'Content-Type: application/json' --data "$data")
+  curl "${args[@]}" "$MIHOMO_API$path"
+}
+
+encoded_group() {
+  jq -rn --arg value "$PROXY_GROUP" '$value | @uri'
+}
+
+get_proxy_group() {
+  api_request GET "/proxies/$(encoded_group)"
+}
+
+refresh_i3status() {
+  if command -v i3status >/dev/null && pgrep -x i3status >/dev/null; then
+    killall -USR1 i3status
+  fi
+}
+
+choose_proxy() {
+  local proxies proxy payload
+  proxies=$(get_proxy_group) || die "无法连接 Mihomo API：$MIHOMO_API"
+  proxy=$(jq -r '.all[]' <<< "$proxies" | fzf --prompt='选择节点> ') || return 0
+  [[ -n $proxy ]] || return 0
+  payload=$(jq -cn --arg name "$proxy" '{name: $name}')
+  api_request PUT "/proxies/$(encoded_group)" "$payload" >/dev/null
+  mkdir -p -- "${PROXY_PATH%/*}"
+  printf '%s\n' "$proxy" > "$PROXY_PATH"
+  printf '当前节点：%s\n' "$(get_proxy_group | jq -r '.now')"
+  refresh_i3status
+}
+
+install_config() {
+  local candidate=$1 timestamp backup
+  timestamp=$(date +%Y%m%d%H%M%S)
+  backup=$MIHOMO_CONFIG.clash-backup.$timestamp
+  run_root /usr/local/bin/mihomo -t -d /etc/mihomo -f "$candidate" >/dev/null \
+    || die "新配置验证失败，当前配置未修改"
+  run_root cp -a -- "$MIHOMO_CONFIG" "$backup"
+  run_root install -o root -g root -m 0600 "$candidate" "$MIHOMO_CONFIG"
+  if ! run_root systemctl restart mihomo.service \
+    || ! run_root systemctl is-active --quiet mihomo.service; then
+    run_root cp -a -- "$backup" "$MIHOMO_CONFIG"
+    if run_root systemctl restart mihomo.service; then
+      run_root unlink "$backup"
+      die "Mihomo 新配置启动失败，已恢复原配置"
+    fi
+    run_root unlink "$backup"
+    die "Mihomo 新配置启动失败，原配置已恢复，但服务仍未能启动"
+  fi
+  run_root unlink "$backup"
+  mkdir -p -- "${MIHOMO_LOCAL_CONFIG%/*}"
+  chmod 0700 "${MIHOMO_LOCAL_CONFIG%/*}"
+  install -m 0600 "$candidate" "$MIHOMO_LOCAL_CONFIG"
+  log "配置已生效"
+}
+
+configure_lan() {
+  local current choice allow_lan port candidate
+  current=$(api_request GET /configs) || die "无法读取 Mihomo 配置"
+  printf '当前状态：allow-lan=%s，mixed-port=%s\n' \
+    "$(jq -r '.["allow-lan"]' <<< "$current")" \
+    "$(jq -r '.["mixed-port"]' <<< "$current")"
+  choice=$(printf '%s\n' '开启局域网代理' '关闭局域网代理' \
+    | fzf --prompt='局域网代理> ') || return 0
+  case $choice in
+    开启*) allow_lan=true ;;
+    关闭*) allow_lan=false ;;
+    *) return 0 ;;
+  esac
+  read -r -p 'mixed-port（1-65535）: ' port
+  [[ $port =~ ^[0-9]+$ && $port -ge 1 && $port -le 65535 ]] \
+    || die "mixed-port 必须是 1 到 65535 之间的整数"
+  TEMP_DIR=$(mktemp -d)
+  candidate=$TEMP_DIR/config.yaml
+  run_root cat "$MIHOMO_CONFIG" > "$candidate"
+  python3 "$UPLOAD_HELPER" patch --config "$candidate" \
+    --allow-lan "$allow_lan" --mixed-port "$port"
+  install_config "$candidate"
+}
+
+lan_ipv4() {
+  ip -4 route get 1.1.1.1 2>/dev/null \
+    | awk '{for (i=1; i<=NF; i++) if ($i == "src") {print $(i+1); exit}}'
+}
+
+upload_config() {
+  [[ -x $UPLOAD_HELPER ]] || die "缺少上传助手：$UPLOAD_HELPER"
+  local port token address url uploaded ready
+  read -r -p '上传服务端口 [8080]: ' port
+  port=${port:-8080}
+  [[ $port =~ ^[0-9]+$ && $port -ge 1024 && $port -le 65535 ]] \
+    || die "上传端口必须是 1024 到 65535 之间的整数"
+  address=$(lan_ipv4)
+  [[ -n $address ]] || die "无法检测局域网 IPv4 地址"
+  token=$(python3 "$UPLOAD_HELPER" token)
+  TEMP_DIR=$(mktemp -d)
+  uploaded=$TEMP_DIR/uploaded.yaml
+  ready=$TEMP_DIR/ready
+  python3 "$UPLOAD_HELPER" serve --bind 0.0.0.0 --port "$port" \
+    --token "$token" --output "$uploaded" --ready "$ready" &
+  UPLOAD_PID=$!
+  for _ in {1..50}; do
+    [[ -e $ready ]] && break
+    kill -0 "$UPLOAD_PID" 2>/dev/null || { wait "$UPLOAD_PID" || true; die "上传服务启动失败"; }
+    sleep 0.1
+  done
+  [[ -e $ready ]] || die "等待上传服务启动超时"
+  url=http://$address:$port/$token/
+  printf '请扫描二维码或访问：%s\n' "$url"
+  qrencode -t ANSIUTF8 "$url"
+  log "等待上传配置，按 Ctrl+C 取消"
+  wait "$UPLOAD_PID" || die "上传服务异常退出"
+  UPLOAD_PID=
+  [[ -s $uploaded ]] || die "未收到配置文件"
+  install_config "$uploaded"
+}
+
+show_menu() {
+  local choice
+  choice=$(printf '%s\n' '1. 选择节点' '2. 配置局域网代理' '3. 上传新配置' \
+    | fzf --prompt='Mihomo> ') || return 0
+  case $choice in
+    1.*) choose_proxy ;;
+    2.*) configure_lan ;;
+    3.*) upload_config ;;
+  esac
+}
+
+while getopts ':pn' option; do
+  case $option in
+    p) get_proxy_group | jq; exit ;;
+    n) get_proxy_group | jq -r '.now'; exit ;;
+    *) printf '用法：%s [-p|-n]\n' "$0" >&2; exit 1 ;;
+  esac
 done
 
-set_proxy
+show_menu

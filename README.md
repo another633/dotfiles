@@ -69,6 +69,9 @@ Bookokrat、Yazi 和 Ttyper 使用固定版本与 SHA-256 的 GitHub Release 二
 GitHub Release 下载固定版本的 `tar.xz` 安装 Zen Browser。
 Mihomo 的真实代理配置不得提交到仓库；新机器应将其放在
 `~/.config/dotfiles/local/mihomo/config.yaml`，首次应用时会复制到 `/etc/mihomo/`。
+`clash` 提供节点选择、局域网代理配置，以及带随机令牌和二维码的一次性
+配置上传服务。配置更新前会先验证并创建临时备份；新配置启动成功后删除备份，
+启动失败时恢复原配置后也会删除备份。
 
 本地覆盖文件位于 `${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles/local/`。当前 Git
 和 Zsh 配置会自动加载其中的 `gitconfig` 与 `zshrc`；敏感信息不要放进仓库。

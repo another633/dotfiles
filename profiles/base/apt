@@ -9,6 +9,7 @@ fzf
 gzip
 ripgrep
 jq
+python3
 tmux
 timg
 chafa
@@ -18,3 +19,4 @@ zoxide
 zsh
 zsh-autosuggestions
 zsh-syntax-highlighting
+qrencode
